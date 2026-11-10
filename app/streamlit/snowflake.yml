@@ -1,0 +1,19 @@
+definition_version: 2
+# Deployed by deploy.sh:  snow streamlit deploy --replace --prune -c <connection>
+# Container runtime: compute_pool is required for SYSTEM$ST_CONTAINER_RUNTIME_*.
+# SYSTEM_COMPUTE_POOL_CPU is the Snowflake-provided pool; to use your own, replace
+# it with your pool name and grant USAGE on it to WILLDAN_DEMO_ADMIN.
+entities:
+  willdan_project_labor:
+    type: streamlit
+    identifier:
+      name: WILLDAN_PROJECT_LABOR
+      database: WILLDAN_DEMO
+      schema: APPS
+    title: "Willdan Project Labor"
+    query_warehouse: WILLDAN_WH
+    runtime_name: SYSTEM$ST_CONTAINER_RUNTIME_PY3_11
+    compute_pool: SYSTEM_COMPUTE_POOL_CPU
+    main_file: streamlit_app.py
+    artifacts:
+      - streamlit_app.py

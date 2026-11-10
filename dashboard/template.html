@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="snowflake-source" content="cortex-agent-authored" />
+<title>Willdan Project Labor – Burn vs Schedule</title>
+<script type="application/json" id="snowflake-report-metadata">
+{
+  "generated": "2026-11-07",
+  "intent": "Willdan project labor burn vs schedule dashboard (synthetic demo data)",
+  "dataSources": [{ "type": "query", "warehouse": "WILLDAN_WH", "sql": "SELECT MAX(_LOADED_AT) FROM WILLDAN_DEMO.RAW.LAB_HS_RAW" }],
+  "sections": [
+    { "id": "kpis", "title": "KPIs", "dataSources": [{ "type": "query", "sql": "SELECT * FROM WILLDAN_DEMO.ANALYTICS.PROJECT_BURN" }] },
+    { "id": "scatter", "title": "Schedule % vs Burn %", "dataSources": [{ "type": "query", "sql": "SELECT * FROM WILLDAN_DEMO.ANALYTICS.PROJECT_BURN" }] },
+    { "id": "at-risk", "title": "At-risk projects", "dataSources": [{ "type": "query", "sql": "SELECT * FROM WILLDAN_DEMO.ANALYTICS.PROJECT_BURN WHERE AT_RISK" }] },
+    { "id": "monthly", "title": "Monthly labor cost by business unit", "dataSources": [{ "type": "query", "sql": "SELECT PERIOD, BUSINESS_UNIT, SUM(LABOR_COST) FROM WILLDAN_DEMO.CURATED.FACT_LABOR GROUP BY 1,2" }] },
+    { "id": "projects", "title": "Projects", "dataSources": [{ "type": "query", "sql": "SELECT * FROM WILLDAN_DEMO.ANALYTICS.PROJECT_BURN" }] },
+    { "id": "exports", "title": "Export log", "dataSources": [{ "type": "query", "sql": "SELECT * FROM WILLDAN_DEMO.CURATED.EXPORT_LOG ORDER BY STARTED_AT DESC LIMIT 50" }] }
+  ],
+  "producerNotes": "Regenerate with: uv run willdan_dashboard/build_dashboard.py. Data embedded in #data."
+}
+</script>
+<script type="application/json" id="data">__DATA_JSON__</script>
+<style>
+  :root {
+    color-scheme: light dark;
+    --sf-blue: #29B5E8; --navy: #11567F; --green: #6CB33F; --risk: #E5484D;
+    --bg: light-dark(#f5f8fb, #0d1b26); --card: light-dark(#ffffff, #142636);
+    --text: light-dark(#1f2937, #e5e7eb); --muted: light-dark(#5b6b7a, #9fb3c4);
+    --line: light-dark(#d9e2ea, #26405a); --head: light-dark(#eef4f8, #1a3247);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  header { background: linear-gradient(90deg, var(--navy), var(--sf-blue)); color: #fff; padding: clamp(16px, 4vw, 24px); border-bottom: 4px solid var(--green); }
+  header h1 { margin: 0; font-size: clamp(20px, 4vw, 28px); color: #fff; }
+  .badge { display: inline-block; margin-top: 8px; background: var(--green); color: #fff; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  main { max-width: 1200px; width: 100%; margin: 0 auto; padding: clamp(12px, 3vw, 24px); }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); margin-bottom: 16px; }
+  .kpis { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+  .kpi .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .kpi .value { font-size: 26px; font-weight: 700; color: light-dark(var(--navy), var(--sf-blue)); margin-top: 4px; }
+  .kpi.risk .value { color: var(--risk); }
+  h2 { margin: 0 0 10px; font-size: 17px; color: light-dark(var(--navy), #f1f5f9); }
+  svg { max-width: 100%; height: auto; display: block; }
+  .axis text, .lbl { fill: var(--muted); font-size: 11px; }
+  .axis line, .axis path { stroke: var(--line); }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; white-space: nowrap; }
+  th { background: var(--head); font-weight: 600; position: sticky; top: 0; }
+  th.sortable { cursor: pointer; user-select: none; }
+  td.num, th.num { text-align: right; }
+  tr.risk td { background: light-dark(#fdecec, #3a1c20); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .toolbar h2 { margin: 0; flex: 1 1 auto; }
+  input[type=text] { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); min-width: 180px; }
+  button { background: var(--sf-blue); color: #fff; border: 0; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer; }
+  button:hover { background: var(--navy); }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin-top: 8px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 5px; background: var(--c); border-radius: 2px; }
+  ul.risk-list { margin: 0; padding-left: 18px; }
+  ul.risk-list li { margin: 6px 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Willdan Project Labor – Burn vs Schedule</h1>
+  <span class="badge">Synthetic demo data</span>
+</header>
+<main>
+  <section id="kpis" class="kpis"></section>
+
+  <div class="grid">
+    <section id="scatter" class="card">
+      <h2>Schedule % vs Burn %</h2>
+      <div id="scatter-chart"></div>
+      <p class="muted">Points above the diagonal are burning budget faster than schedule. Red = at risk.</p>
+    </section>
+    <section id="at-risk" class="card">
+      <h2>At-risk projects</h2>
+      <ul class="risk-list" id="risk-list"></ul>
+    </section>
+  </div>
+
+  <section id="monthly" class="card" style="margin-bottom:16px">
+    <div class="toolbar"><h2>Monthly labor cost by business unit</h2><button type="button" data-export="monthly">Export CSV</button></div>
+    <div id="bar-chart"></div>
+    <div class="legend" id="bar-legend"></div>
+  </section>
+
+  <section id="projects" class="card" style="margin-bottom:16px">
+    <div class="toolbar">
+      <h2>Projects</h2>
+      <input type="text" id="proj-filter" placeholder="Filter projects..." aria-label="Filter projects" />
+      <label><input type="checkbox" id="risk-only" /> At-risk only</label>
+      <button type="button" data-export="projects">Export CSV</button>
+    </div>
+    <div class="table-wrap"><table id="proj-table"></table></div>
+  </section>
+
+  <section id="exports" class="card">
+    <div class="toolbar"><h2>Export log (last 50)</h2><button type="button" data-export="exports">Export CSV</button></div>
+    <div class="table-wrap"><table id="export-table"></table></div>
+  </section>
+</main>
+<footer id="footer"></footer>
+
+<script>
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("data").textContent);
+  var P = D.projects || [];
+  var NS = "http://www.w3.org/2000/svg";
+  var COLORS = ["#29B5E8", "#11567F", "#6CB33F", "#F2A93B", "#8E6CC9", "#E5484D", "#3BB9A6", "#7D8B99"];
+
+  function money(v) {
+    v = Number(v || 0);
+    if (Math.abs(v) >= 1e6) return "$" + (v / 1e6).toFixed(2) + "M";
+    if (Math.abs(v) >= 1e3) return "$" + (v / 1e3).toFixed(1) + "K";
+    return "$" + v.toFixed(0);
+  }
+  function pct(v) { return v == null ? "" : Number(v).toFixed(1) + "%"; }
+  function el(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+  function sum(a, f) { return a.reduce(function (s, r) { return s + Number(r[f] || 0); }, 0); }
+
+  // KPIs
+  var risk = P.filter(function (r) { return r.AT_RISK; });
+  var kpis = [
+    ["Total contract value", money(sum(P, "CONTRACT_VALUE"))],
+    ["Labor to date", money(sum(P, "LABOR_TO_DATE"))],
+    ["Budget remaining", money(sum(P, "BUDGET_REMAINING"))],
+    ["Projects at risk", risk.length + " / " + P.length, "risk"],
+    ["Avg burn", pct(P.length ? sum(P, "BURN_PCT") / P.length : 0)]
+  ];
+  var kpiBox = document.getElementById("kpis");
+  kpis.forEach(function (k) {
+    var c = document.createElement("div");
+    c.className = "card kpi" + (k[2] ? " " + k[2] : "");
+    var l = document.createElement("div"); l.className = "label"; l.textContent = k[0];
+    var v = document.createElement("div"); v.className = "value"; v.textContent = k[1];
+    c.appendChild(l); c.appendChild(v); kpiBox.appendChild(c);
+  });
+
+  // Scatter
+  (function () {
+    var W = 520, H = 380, m = { l: 46, r: 16, t: 12, b: 40 };
+    var max = Math.max(110, Math.ceil(Math.max.apply(null, P.map(function (r) { return Math.max(r.BURN_PCT || 0, r.SCHEDULE_PCT || 0); }).concat([0])) / 10) * 10);
+    var x = function (v) { return m.l + (v / max) * (W - m.l - m.r); };
+    var y = function (v) { return H - m.b - (v / max) * (H - m.t - m.b); };
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Schedule vs burn scatter" });
+    var ax = el("g", { "class": "axis" });
+    for (var t = 0; t <= max; t += 20) {
+      ax.appendChild(el("line", { x1: x(t), x2: x(t), y1: y(0), y2: y(max), "stroke-dasharray": "2 3" }));
+      ax.appendChild(el("line", { x1: x(0), x2: x(max), y1: y(t), y2: y(t), "stroke-dasharray": "2 3" }));
+      ax.appendChild(el("text", { x: x(t), y: H - m.b + 16, "text-anchor": "middle" }, t + "%"));
+      ax.appendChild(el("text", { x: m.l - 6, y: y(t) + 4, "text-anchor": "end" }, t + "%"));
+    }
+    ax.appendChild(el("text", { x: (W + m.l) / 2, y: H - 6, "text-anchor": "middle" }, "Schedule elapsed %"));
+    ax.appendChild(el("text", { x: 12, y: H / 2, "text-anchor": "middle", transform: "rotate(-90 12 " + H / 2 + ")" }, "Budget burned %"));
+    svg.appendChild(ax);
+    svg.appendChild(el("line", { x1: x(0), y1: y(0), x2: x(max), y2: y(max), stroke: "#11567F", "stroke-width": 1.5, "stroke-dasharray": "6 4" }));
+    P.forEach(function (r) {
+      var cx = x(r.SCHEDULE_PCT || 0), cy = y(r.BURN_PCT || 0);
+      var c = el("circle", { cx: cx, cy: cy, r: r.AT_RISK ? 7 : 5, fill: r.AT_RISK ? "#E5484D" : "#29B5E8", "fill-opacity": 0.85, stroke: "#fff", "stroke-width": 1 });
+      c.appendChild(el("title", {}, r.PROJECT_ID + " – " + r.PROJECT_NAME + "\nSchedule " + pct(r.SCHEDULE_PCT) + ", Burn " + pct(r.BURN_PCT)));
+      svg.appendChild(c);
+      if (r.AT_RISK) svg.appendChild(el("text", { x: cx + 9, y: cy + 4, "class": "lbl" }, r.PROJECT_ID));
+    });
+    document.getElementById("scatter-chart").appendChild(svg);
+  })();
+
+  // At-risk list
+  var rl = document.getElementById("risk-list");
+  if (!risk.length) { var li0 = document.createElement("li"); li0.textContent = "No projects at risk."; rl.appendChild(li0); }
+  risk.slice().sort(function (a, b) { return (b.BURN_VS_SCHEDULE_GAP || 0) - (a.BURN_VS_SCHEDULE_GAP || 0); }).forEach(function (r) {
+    var li = document.createElement("li");
+    var b = document.createElement("strong"); b.textContent = r.PROJECT_ID + " " + r.PROJECT_NAME;
+    var s = document.createElement("div"); s.className = "muted";
+    s.textContent = r.CUSTOMER_NAME + " · PM " + r.PM_NAME + " · burn " + pct(r.BURN_PCT) + " vs schedule " + pct(r.SCHEDULE_PCT) + " (gap " + pct(r.BURN_VS_SCHEDULE_GAP) + "), remaining " + money(r.BUDGET_REMAINING);
+    li.appendChild(b); li.appendChild(s); rl.appendChild(li);
+  });
+
+  // Monthly stacked bars
+  (function () {
+    var rows = D.monthly || [];
+    var periods = [], bus = [], map = {};
+    rows.forEach(function (r) {
+      if (periods.indexOf(r.PERIOD) < 0) periods.push(r.PERIOD);
+      if (bus.indexOf(r.BUSINESS_UNIT) < 0) bus.push(r.BUSINESS_UNIT);
+      map[r.PERIOD + "|" + r.BUSINESS_UNIT] = Number(r.LABOR_COST || 0);
+    });
+    periods.sort(); bus.sort();
+    var totals = periods.map(function (p) { return bus.reduce(function (s, b) { return s + (map[p + "|" + b] || 0); }, 0); });
+    var W = 1000, H = 320, m = { l: 64, r: 10, t: 10, b: 40 };
+    var max = Math.max.apply(null, totals.concat([1])) * 1.08;
+    var bw = (W - m.l - m.r) / Math.max(periods.length, 1);
+    var y = function (v) { return H - m.b - (v / max) * (H - m.t - m.b); };
+    var svg = el("svg", { viewBox: "0 0 " + W + " " + H, role: "img", "aria-label": "Monthly labor cost stacked bar" });
+    var ax = el("g", { "class": "axis" });
+    for (var i = 0; i <= 4; i++) {
+      var v = max * i / 4;
+      ax.appendChild(el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), "stroke-dasharray": "2 3" }));
+      ax.appendChild(el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, money(v)));
+    }
+    svg.appendChild(ax);
+    periods.forEach(function (p, pi) {
+      var acc = 0, x0 = m.l + pi * bw + bw * 0.15;
+      bus.forEach(function (b, bi) {
+        var v = map[p + "|" + b] || 0;
+        if (!v) return;
+        var r = el("rect", { x: x0, y: y(acc + v), width: bw * 0.7, height: y(acc) - y(acc + v), fill: COLORS[bi % COLORS.length] });
+        r.appendChild(el("title", {}, p + " · " + b + ": " + money(v)));
+        svg.appendChild(r); acc += v;
+      });
+      var step = Math.ceil(periods.length / 12);
+      if (pi % step === 0) svg.appendChild(el("text", { x: x0 + bw * 0.35, y: H - m.b + 16, "text-anchor": "middle", "class": "lbl" }, p));
+    });
+    document.getElementById("bar-chart").appendChild(svg);
+    var lg = document.getElementById("bar-legend");
+    bus.forEach(function (b, bi) { var s = document.createElement("span"); s.style.setProperty("--c", COLORS[bi % COLORS.length]); s.textContent = b; lg.appendChild(s); });
+  })();
+
+  // Tables
+  function makeTable(tableId, cols, rowsFn, rowClass) {
+    var state = { key: null, dir: 1 };
+    var table = document.getElementById(tableId);
+    var thead = document.createElement("thead"), tbody = document.createElement("tbody");
+    var tr = document.createElement("tr");
+    cols.forEach(function (c) {
+      var th = document.createElement("th");
+      th.textContent = c.label; th.className = "sortable" + (c.num ? " num" : "");
+      th.addEventListener("click", function () {
+        state.dir = state.key === c.key ? -state.dir : 1; state.key = c.key; render();
+      });
+      tr.appendChild(th);
+    });
+    thead.appendChild(tr); table.appendChild(thead); table.appendChild(tbody);
+    function current() {
+      var rows = rowsFn().slice();
+      if (state.key) rows.sort(function (a, b) {
+        var x = a[state.key], y = b[state.key];
+        if (x == null) return 1; if (y == null) return -1;
+        return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y))) * state.dir;
+      });
+      return rows;
+    }
+    function render() {
+      tbody.textContent = "";
+      Array.prototype.forEach.call(thead.querySelectorAll("th"), function (th, i) {
+        th.textContent = cols[i].label + (state.key === cols[i].key ? (state.dir > 0 ? " ▲" : " ▼") : "");
+      });
+      current().forEach(function (r) {
+        var row = document.createElement("tr");
+        if (rowClass && rowClass(r)) row.className = rowClass(r);
+        cols.forEach(function (c) {
+          var td = document.createElement("td");
+          td.textContent = c.fmt ? c.fmt(r[c.key]) : (r[c.key] == null ? "" : String(r[c.key]));
+          if (c.num) td.className = "num";
+          row.appendChild(td);
+        });
+        tbody.appendChild(row);
+      });
+      if (!tbody.children.length) {
+        var e = document.createElement("tr"), td = document.createElement("td");
+        td.colSpan = cols.length; td.className = "muted"; td.textContent = "No rows.";
+        e.appendChild(td); tbody.appendChild(e);
+      }
+    }
+    render();
+    return { render: render, rows: current, cols: cols };
+  }
+
+  var filterInput = document.getElementById("proj-filter"), riskOnly = document.getElementById("risk-only");
+  function filteredProjects() {
+    var q = filterInput.value.trim().toLowerCase();
+    return P.filter(function (r) {
+      if (riskOnly.checked && !r.AT_RISK) return false;
+      if (!q) return true;
+      return [r.PROJECT_ID, r.PROJECT_NAME, r.PROGRAM_NAME, r.CUSTOMER_NAME, r.BUSINESS_UNIT, r.PM_NAME, r.CONTRACT_TYPE]
+        .join(" ").toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  var tables = {
+    projects: makeTable("proj-table", [
+      { key: "PROJECT_ID", label: "Project ID" }, { key: "PROJECT_NAME", label: "Project" },
+      { key: "CUSTOMER_NAME", label: "Customer" }, { key: "BUSINESS_UNIT", label: "Business Unit" },
+      { key: "PM_NAME", label: "PM" }, { key: "CONTRACT_TYPE", label: "Type" },
+      { key: "CONTRACT_VALUE", label: "Contract", num: true, fmt: money },
+      { key: "LABOR_TO_DATE", label: "Labor to Date", num: true, fmt: money },
+      { key: "BUDGET_REMAINING", label: "Remaining", num: true, fmt: money },
+      { key: "BURN_PCT", label: "Burn %", num: true, fmt: pct },
+      { key: "SCHEDULE_PCT", label: "Schedule %", num: true, fmt: pct },
+      { key: "BURN_VS_SCHEDULE_GAP", label: "Gap", num: true, fmt: pct },
+      { key: "AT_RISK", label: "At Risk", fmt: function (v) { return v ? "Yes" : "No"; } }
+    ], filteredProjects, function (r) { return r.AT_RISK ? "risk" : ""; }),
+    exports: makeTable("export-table", [
+      { key: "STARTED_AT", label: "Started" }, { key: "FEED", label: "Feed" }, { key: "PERIOD", label: "Period" },
+      { key: "STATUS", label: "Status" }, { key: "ROWS_EXPORTED", label: "Rows", num: true },
+      { key: "PATH", label: "Path" }, { key: "MESSAGE", label: "Message" }, { key: "RUN_ID", label: "Run ID" }
+    ], function () { return D.exports || []; }),
+    monthly: { rows: function () { return D.monthly || []; }, cols: [
+      { key: "PERIOD", label: "Period" }, { key: "BUSINESS_UNIT", label: "Business Unit" }, { key: "LABOR_COST", label: "Labor Cost" }] }
+  };
+  filterInput.addEventListener("input", tables.projects.render);
+  riskOnly.addEventListener("change", tables.projects.render);
+
+  // RFC 4180 CSV export of currently filtered/sorted rows (raw values)
+  function csvCell(v) { return '"' + (v == null ? "" : String(v)).replace(/"/g, '""') + '"'; }
+  Array.prototype.forEach.call(document.querySelectorAll("button[data-export]"), function (btn) {
+    btn.addEventListener("click", function () {
+      var t = tables[btn.getAttribute("data-export")];
+      var lines = [t.cols.map(function (c) { return csvCell(c.label); }).join(",")];
+      t.rows().forEach(function (r) { lines.push(t.cols.map(function (c) { return csvCell(r[c.key]); }).join(",")); });
+      var blob = new Blob([lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "willdan_" + btn.getAttribute("data-export") + ".csv";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    });
+  });
+
+  document.getElementById("footer").textContent = "Data as of " + (D.latest_load || "unknown") + " from Snowflake · generated " + D.generated_at;
+})();
+</script>
+</body>
+</html>

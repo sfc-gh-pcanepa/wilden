@@ -1,0 +1,18 @@
+# Local outputs
+exports/
+willdan-dashboard.html
+*.csv
+
+# Snowflake CLI / Streamlit build output
+.snowflake/
+app/streamlit/output/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Secrets
+.env
+*.p8
+*.pem
